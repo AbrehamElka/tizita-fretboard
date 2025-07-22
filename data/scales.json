@@ -1,0 +1,26 @@
+{
+  "major": {
+    "name": "Major Scale",
+    "root": "C",
+    "intervals": ["1", "2", "3", "4", "5", "6", "7"],
+    "notes": ["C", "D", "E", "F", "G", "A", "B"]
+  },
+  "minor_pentatonic": {
+    "name": "Minor Pentatonic",
+    "root": "A",
+    "intervals": ["1", "b3", "4", "5", "b7"],
+    "notes": ["A", "C", "D", "E", "G"]
+  },
+  "ethiopian_2nd": {
+    "name": "2nd Song (Mode)",
+    "root": "C",
+    "intervals": ["1", "2", "4", "5", "6"],
+    "notes": ["C", "D", "F", "G", "A"]
+  },
+  "ethiopian_5th": {
+    "name": "5th Song (Mode)",
+    "root": "D",
+    "intervals": ["1", "2", "3", "5", "6"],
+    "notes": ["D", "E", "F#", "A", "B"]
+  }
+}
