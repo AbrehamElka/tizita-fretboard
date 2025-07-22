@@ -1,8 +1,9 @@
 // src/app/layout.tsx
-import "./globals.css"; // Your global Tailwind CSS imports
-import { Inter } from "next/font/google"; // Example font, use what you prefer
-import Header from "@/components/Header"; // Import your Header component
-import Footer from "@/components/Footer"; // Import your Footer component
+import "./globals.css";
+import { Inter } from "next/font/google";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import { ThemeProvider } from "@/contexts/ThemeContext"; // Import ThemeProvider
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -22,11 +23,13 @@ export default function RootLayout({
       <body
         className={`${inter.className} antialiased flex flex-col min-h-screen bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100`}
       >
-        <Header />
-        <main className="flex-grow container mx-auto p-4">
-          {children} {/* This is where your page content will be rendered */}
-        </main>
-        <Footer />
+        <ThemeProvider>
+          {" "}
+          {/* Wrap your content with ThemeProvider */}
+          <Header />
+          <main className="flex-grow container mx-auto p-4">{children}</main>
+          <Footer />
+        </ThemeProvider>
       </body>
     </html>
   );

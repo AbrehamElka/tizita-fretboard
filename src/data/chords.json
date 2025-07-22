@@ -1,0 +1,44 @@
+[
+  {
+    "id": "e-minor",
+    "name": "E minor",
+    "root": "E",
+    "type": "minor",
+    "positions": [
+      {
+        "name": "Open Position",
+        "frets": [0, 0, 0, 2, 2, 0],
+        "fingers": [null, null, null, 2, 1, null],
+        "barre": null
+      }
+    ]
+  },
+  {
+    "id": "c-major",
+    "name": "C Major",
+    "root": "C",
+    "type": "major",
+    "positions": [
+      {
+        "name": "Open Position",
+        "frets": [0, 1, 0, 2, 3, null],
+        "fingers": [null, 1, null, 2, 3, null],
+        "barre": null
+      }
+    ]
+  },
+  {
+    "id": "g-major",
+    "name": "G Major",
+    "root": "G",
+    "type": "major",
+    "positions": [
+      {
+        "name": "Open Position",
+        "frets": [3, 2, 0, 0, 0, 3],
+        "fingers": [4, 3, null, null, null, 1],
+        "barre": null
+      }
+    ]
+  }
+]

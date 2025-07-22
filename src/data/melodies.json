@@ -1,0 +1,46 @@
+[
+  {
+    "id": "ye-beye-medin",
+    "title": "Ye Beyene Medhin",
+    "composer": "Traditional",
+    "description": "A classic Ethiopian Orthodox Tewahedo Mezmur often played during fasting seasons.",
+    "mode": "Tizita Minor",
+    "tabs": [
+      [3, 0],
+      [3, 2],
+      [2, 1],
+      [2, 3],
+      [1, 0],
+      [1, 1],
+      [1, 0],
+      [2, 3],
+      [2, 1],
+      [3, 2],
+      [3, 0],
+      [4, 3]
+    ],
+    "audioPath": "/audio/mezmur/ye-beye-medhin.mp3"
+  },
+  {
+    "id": "kalkidan",
+    "title": "Kalkidan",
+    "composer": "Unknown",
+    "description": "A joyful mezmur with a vibrant melody.",
+    "mode": "Tizita Major",
+    "tabs": [
+      [2, 3],
+      [2, 1],
+      [3, 2],
+      [3, 0],
+      [4, 3],
+      [4, 2],
+      [3, 0],
+      [2, 1],
+      [2, 3],
+      [1, 0],
+      [1, 1],
+      [1, 3]
+    ],
+    "audioPath": "/audio/mezmur/kalkidan.mp3"
+  }
+]
