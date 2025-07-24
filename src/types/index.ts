@@ -24,7 +24,7 @@ export interface Chord {
       // Optional: for barre chords
       fret: number; // The fret where the barre is
       strings: [number, number]; // [startString, endString] for the barre (e.g., [1, 6] for full barre)
-    };
+    } | null;
     capo?: number; // Optional: fret where capo is placed if applicable for this voicing
   }>;
   // We'll add audio property later in Phase 3
@@ -64,4 +64,12 @@ export interface Melody {
   tabs: FretPosition[]; // Array of [string, fret] sequences for the melody
   audioPath: string; // Path to the pre-recorded audio file for the melody
   // Later: more complex tab format, tempo, etc.
+}
+
+// NEW: Type for an item in the melody sequence
+export interface MelodySequenceItem {
+  id: string; // Unique ID for keying, deletion, reordering
+  string: number; // 1-indexed string number
+  fret: number; // 0-indexed fret number
+  noteName: string; // The calculated musical note name (e.g., "C4")
 }

@@ -62,6 +62,18 @@ export default function Header() {
               Melodies
             </Link>
           </li>
+
+          <li>
+            <Link
+              href="/playground"
+              className="text-gray-300 hover:text-white transition-colors text-lg font-bold"
+            >
+              {" "}
+              {/* New Link */}
+              Playground
+            </Link>
+          </li>
+
           {/* Social Link (e.g., Telegram) */}
           <li>
             <a
