@@ -1,34 +1,60 @@
 // src/app/chords/page.tsx
+
+import React from "react";
 import ChordDisplay from "@/components/ChordDisplay";
-import { Chord } from "@/types"; // Import your Chord type
-import fs from "fs";
-import path from "path";
+import chordsData from "@/data/chords.json"; // Import your JSON data
+import { ChordsData, Chord } from "@/types";
 
-// Function to read static chord data
-// This is a Server Component, so we can use Node.js file system modules (fs, path)
-async function getChords(): Promise<Chord[]> {
-  const filePath = path.join(process.cwd(), "src", "data", "chords.json");
-  const fileContents = await fs.promises.readFile(filePath, "utf8");
-  return JSON.parse(fileContents);
-}
+// Type assertion to ensure imported JSON matches ChordsData interface
+const typedChordsData: ChordsData = chordsData as ChordsData;
 
-export default async function ChordsPage() {
-  const chords = await getChords();
+const ChordsPage: React.FC = () => {
+  // Get all root notes (categories) and sort them alphabetically
+  const rootNotes = Object.keys(typedChordsData).sort((a, b) => {
+    // Custom sort order for chromatic scale
+    const order = [
+      "A",
+      "A#",
+      "B",
+      "C",
+      "C#",
+      "D",
+      "D#",
+      "E",
+      "F",
+      "F#",
+      "G",
+      "G#",
+    ];
+    return order.indexOf(a) - order.indexOf(b);
+  });
 
   return (
-    <div className="py-8">
-      <h1 className="text-4xl font-extrabold mb-8 text-center text-gray-900 dark:text-white">
-        Chord Viewer
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <h1 className="text-4xl font-bold text-purple-400 mb-8 text-center">
+        Guitar Chords Library
       </h1>
-      <p className="text-center text-lg text-gray-700 dark:text-gray-300 mb-10">
-        Select a chord to view its fretboard diagram and fingering.
-      </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {chords.map((chord) => (
-          <ChordDisplay key={chord.id} chord={chord} />
-        ))}
-      </div>
+      {rootNotes.length === 0 ? (
+        <p className="text-gray-400 text-center">No chord data available.</p>
+      ) : (
+        <div className="space-y-12">
+          {rootNotes.map((rootNote) => (
+            <div key={rootNote}>
+              <h2 className="text-3xl font-semibold text-purple-300 mb-6 border-b border-gray-700 pb-2">
+                {rootNote} Chords
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {typedChordsData[rootNote].map((chord: Chord) => (
+                  <ChordDisplay key={chord.id} chord={chord} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default ChordsPage;

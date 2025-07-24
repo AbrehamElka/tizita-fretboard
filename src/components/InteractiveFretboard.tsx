@@ -4,13 +4,14 @@ import React, { useState, useCallback } from "react";
 import { FretPosition } from "@/types"; // Adjust path if needed
 
 interface InteractiveFretboardProps {
-  staticHighlightedNotes?: FretPosition[]; // Keeping this if you want external static highlights
   melodyNotes?: FretPosition[]; // Notes currently in the melody sequence (e.g., green highlight)
   playingNotes?: FretPosition[]; // Notes currently being played (yellow pulse)
-  onFretboardInteraction: (notesToReport: FretPosition[]) => void;
+  currentGroupSelection?: FretPosition[]; // Notes currently selected for a chord (blue highlight) - NEW PROP
+  onFretboardInteraction: (notesToReport: FretPosition) => void; // Changed to single FretPosition
   onStringSelect?: (stringNum: number) => void;
   numFrets?: number;
-  isMelodyPlaying?: boolean; // New prop to indicate if a melody is currently playing
+  isMelodyPlaying?: boolean;
+  animationMode?: "simultaneous" | "fade-in";
 }
 
 // String names from high E to low E (for display)
@@ -80,17 +81,17 @@ const getNoteName = (stringNum: number, fretNum: number): string => {
 // --- End Note Calculation Additions ---
 
 export default function InteractiveFretboard({
-  staticHighlightedNotes = [],
-  melodyNotes = [], // These are the notes that stay highlighted (e.g., green) when not playing
-  playingNotes = [], // These are the notes currently being played (yellow pulse)
-  onFretboardInteraction,
+  melodyNotes = [],
+  playingNotes = [],
+  currentGroupSelection = [], // Destructure new prop
+  onFretboardInteraction, // Now expects a single FretPosition
   onStringSelect,
   numFrets = 15,
-  isMelodyPlaying = false, // Default to false
+  isMelodyPlaying = false,
+  animationMode = "simultaneous",
 }: InteractiveFretboardProps) {
-  const [currentGroupSelection, setCurrentGroupSelection] = useState<
-    FretPosition[]
-  >([]);
+  // `currentGroupSelection` is now managed by the parent, so we remove the local state
+  // const [currentGroupSelection, setCurrentGroupSelection] = useState<FretPosition[]>([]);
 
   // Helper to check if a note is part of the 'melodyNotes' set
   const isMelodyNote = useCallback(
@@ -110,7 +111,7 @@ export default function InteractiveFretboard({
   const isInCurrentGroup = useCallback(
     (stringNum: number, fretNum: number) =>
       currentGroupSelection.some(([s, f]) => s === stringNum && f === fretNum),
-    [currentGroupSelection]
+    [currentGroupSelection] // Dependency on the new prop
   );
 
   // Unified click handler for both frets and nuts
@@ -120,38 +121,17 @@ export default function InteractiveFretboard({
       stringNum: number,
       fretIdx: number
     ) => {
-      // Prevent interaction if a melody is currently playing
       if (isMelodyPlaying) {
         console.log("Melody is playing, interaction disabled.");
         return;
       }
 
       const clickedNote: FretPosition = [stringNum, fretIdx];
-      const isCtrlPressed = event.ctrlKey || event.metaKey;
-
-      if (isCtrlPressed) {
-        setCurrentGroupSelection((prevGroup) => {
-          const isAlreadyInGroup = prevGroup.some(
-            ([s, f]) => s === clickedNote[0] && f === clickedNote[1]
-          );
-
-          let newGroup: FretPosition[];
-          if (isAlreadyInGroup) {
-            newGroup = prevGroup.filter(
-              ([s, f]) => !(s === clickedNote[0] && f === clickedNote[1])
-            );
-          } else {
-            newGroup = [...prevGroup, clickedNote];
-          }
-          onFretboardInteraction(newGroup);
-          return newGroup;
-        });
-      } else {
-        setCurrentGroupSelection([]);
-        onFretboardInteraction([clickedNote]);
-      }
+      // InteractiveFretboard now simply reports the clicked note and whether Ctrl/Cmd was pressed.
+      // GuitarPlayground will handle the logic of adding to currentGroupSelection or melodySequence.
+      onFretboardInteraction(clickedNote); // Pass only the clicked note
     },
-    [onFretboardInteraction, isMelodyPlaying] // Add isMelodyPlaying as a dependency
+    [onFretboardInteraction, isMelodyPlaying]
   );
 
   return (
@@ -201,12 +181,11 @@ export default function InteractiveFretboard({
                       const inCurrentGroup = isInCurrentGroup(
                         stringNum,
                         fretIdx
-                      );
-                      const melody = isMelodyNote(stringNum, fretIdx); // Check if it's a melody note
+                      ); // Uses the prop
+                      const melody = isMelodyNote(stringNum, fretIdx);
 
                       const noteName = getNoteName(stringNum, fretIdx);
 
-                      // Determine the final background color based on precedence
                       let bgColorClass = "bg-gray-900"; // Default fret color
                       let textColorClass = "";
 
@@ -225,12 +204,10 @@ export default function InteractiveFretboard({
                         bgColorClass = "bg-blue-600 border-blue-400"; // For Ctrl/Cmd selection
                         textColorClass = "text-white";
                       } else if (melody) {
-                        // This only applies if it's a melody note AND NOT being played AND NOT in current selection
                         bgColorClass = "bg-green-500 shadow-md"; // Static melody color
                         textColorClass = "text-white";
                       }
 
-                      // Additional classes for scale, border, z-index, etc.
                       const commonClasses = `
                         relative w-8 h-8 rounded-full flex items-center justify-center
                         mx-auto my-auto
@@ -270,42 +247,29 @@ export default function InteractiveFretboard({
                             }
                           `}
                         >
-                          {isNut ? (
-                            <button
-                              className={`
-                                ${bgColorClass} ${textColorClass}
-                                ${commonClasses}
-                                ${isNut ? "border-r-2 border-gray-600" : ""}
-                                font-bold text-sm
-                              `}
-                              onClick={(event) =>
-                                handleClick(event, stringNum, fretIdx)
-                              }
-                              title={`Open String ${stringNames[stringIdx]} (${noteName})`}
-                            >
-                              {stringNames[stringIdx]}
-                              {(playing || melody || inCurrentGroup) && (
-                                <span className="absolute bottom-1 text-xs">
-                                  {noteName}
-                                </span>
-                              )}
-                            </button>
-                          ) : (
-                            <button
-                              className={`
-                                ${bgColorClass} ${textColorClass}
-                                ${commonClasses}
-                              `}
-                              onClick={(event) =>
-                                handleClick(event, stringNum, fretIdx)
-                              }
-                              title={`String ${stringNum}, Fret ${fretIdx} (${noteName})`}
-                            >
-                              {playing || melody || inCurrentGroup
-                                ? noteName
-                                : ""}
-                            </button>
-                          )}
+                          <button
+                            className={`
+                              ${bgColorClass} ${textColorClass}
+                              ${commonClasses}
+                              ${isNut ? "border-r-2 border-gray-600" : ""}
+                              font-bold text-sm
+                            `}
+                            onClick={(event) =>
+                              handleClick(event, stringNum, fretIdx)
+                            }
+                            title={`String ${stringNum}, Fret ${fretIdx} (${noteName})`}
+                          >
+                            {isNut ? stringNames[stringIdx] : ""}
+                            {(playing || melody || inCurrentGroup) && (
+                              <span
+                                className={`absolute ${
+                                  isNut ? "bottom-1" : "text-sm"
+                                } text-xs`}
+                              >
+                                {noteName}
+                              </span>
+                            )}
+                          </button>
 
                           {/* Fret Markers (dots) */}
                           {stringIdx === 2 &&

@@ -4,7 +4,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { FretPosition, MelodySequenceItem } from "@/types";
-import InteractiveFretboard from "@/components/InteractiveFretboard"; // Corrected path to InteractiveFretboard
+import InteractiveFretboard from "@/components/InteractiveFretboard";
 
 const chromaticScale = [
   "A",
@@ -49,7 +49,7 @@ const getNoteName = (stringNum: number, fretNum: number): string => {
 };
 
 // Define Animation Modes
-type AnimationMode = "simultaneous" | "sequential";
+type AnimationMode = "simultaneous" | "fade-in";
 
 const GuitarPlayground: React.FC = () => {
   const [selectedMelodySequence, setSelectedMelodySequence] = useState<
@@ -61,13 +61,12 @@ const GuitarPlayground: React.FC = () => {
   >([]);
   const [animationMode, setAnimationMode] =
     useState<AnimationMode>("simultaneous");
-  const [isMelodyPlaying, setIsMelodyPlaying] = useState(false); // State to track if melody is active
+  const [isMelodyPlaying, setIsMelodyPlaying] = useState(false);
 
   const playTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentSequenceIndexRef = useRef<number>(0);
   const numFrets = 15;
 
-  // Ref to track if Ctrl/Cmd key is currently held down
   const isCtrlOrCmdPressed = useRef(false);
 
   // --- Keyboard Event Listeners (for tracking Ctrl/Cmd state) ---
@@ -82,6 +81,7 @@ const GuitarPlayground: React.FC = () => {
       if (event.key === "Control" || event.key === "Meta") {
         isCtrlOrCmdPressed.current = false;
 
+        // When Ctrl/Cmd is released, if there's a group, add it as a chord
         if (currentFretboardGroup.length > 0) {
           const chordNoteNames = currentFretboardGroup.map(([s, f]) =>
             getNoteName(s, f)
@@ -93,8 +93,8 @@ const GuitarPlayground: React.FC = () => {
             type: "chord",
           };
           setSelectedMelodySequence((prev) => [...prev, newChord]);
-          setCurrentFretboardGroup([]);
-          setPlayingNotes([]); // Clear immediate highlight after adding to sequence
+          setCurrentFretboardGroup([]); // Clear the blue highlight after adding to sequence
+          setPlayingNotes([]); // Clear any temporary yellow highlight
         }
       }
     };
@@ -106,35 +106,54 @@ const GuitarPlayground: React.FC = () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [currentFretboardGroup]);
+  }, [currentFretboardGroup]); // Dependency to ensure the latest currentFretboardGroup is captured
 
   // --- Fretboard Interaction Handler ---
+  // This function is called by InteractiveFretboard when a fret/nut is clicked.
+  // It receives the notes that were just clicked.
   const handleFretboardInteraction = useCallback(
-    (notesFromFretboard: FretPosition[]) => {
-      setCurrentFretboardGroup(notesFromFretboard);
+    (clickedNote: FretPosition) => {
+      // Now receives a single clicked note
+      // If Ctrl/Cmd is pressed, manage the current group selection (blue highlight)
+      if (isCtrlOrCmdPressed.current) {
+        setCurrentFretboardGroup((prevGroup) => {
+          const isAlreadyInGroup = prevGroup.some(
+            ([s, f]) => s === clickedNote[0] && f === clickedNote[1]
+          );
+          if (isAlreadyInGroup) {
+            return prevGroup.filter(
+              ([s, f]) => !(s === clickedNote[0] && f === clickedNote[1])
+            );
+          } else {
+            return [...prevGroup, clickedNote];
+          }
+        });
+        // For Ctrl/Cmd clicks, also show immediate yellow highlight for the clicked note
+        setPlayingNotes([clickedNote]);
+        if (playTimeoutRef.current) clearTimeout(playTimeoutRef.current);
+        playTimeoutRef.current = setTimeout(() => setPlayingNotes([]), 300);
+      } else {
+        // If not Ctrl/Cmd, it's a single note selection
+        // Clear any ongoing chord selection
+        setCurrentFretboardGroup([]);
+        // Add single note to melody sequence immediately
+        const noteName = getNoteName(clickedNote[0], clickedNote[1]);
+        const newNote: MelodySequenceItem = {
+          id: `${clickedNote[0]}-${clickedNote[1]}-${Date.now()}`,
+          notes: [clickedNote],
+          noteNames: [noteName],
+          type: "single",
+        };
+        setSelectedMelodySequence((prev) => [...prev, newNote]);
 
-      setPlayingNotes(notesFromFretboard);
-      if (playTimeoutRef.current) clearTimeout(playTimeoutRef.current);
-      playTimeoutRef.current = setTimeout(() => setPlayingNotes([]), 300);
+        // Show immediate yellow highlight for the single note
+        setPlayingNotes([clickedNote]);
+        if (playTimeoutRef.current) clearTimeout(playTimeoutRef.current);
+        playTimeoutRef.current = setTimeout(() => setPlayingNotes([]), 300);
+      }
     },
-    []
+    [] // No dependencies that change often, so it's stable
   );
-
-  // --- Effect to handle adding SINGLE notes to melody sequence ---
-  useEffect(() => {
-    if (currentFretboardGroup.length === 1 && !isCtrlOrCmdPressed.current) {
-      const [stringNum, fretNum] = currentFretboardGroup[0];
-      const noteName = getNoteName(stringNum, fretNum);
-      const newNote: MelodySequenceItem = {
-        id: `${stringNum}-${fretNum}-${Date.now()}`,
-        notes: currentFretboardGroup,
-        noteNames: [noteName],
-        type: "single",
-      };
-      setSelectedMelodySequence((prev) => [...prev, newNote]);
-      setCurrentFretboardGroup([]);
-    }
-  }, [currentFretboardGroup]);
 
   // --- Melody Playback and Clear Functions ---
   const playMelody = useCallback(async () => {
@@ -150,31 +169,13 @@ const GuitarPlayground: React.FC = () => {
         const currentStep =
           selectedMelodySequence[currentSequenceIndexRef.current];
 
-        if (animationMode === "simultaneous") {
-          // Mode 1: All notes in the step highlight simultaneously
-          setPlayingNotes(currentStep.notes);
-          currentSequenceIndexRef.current++;
-          playTimeoutRef.current = setTimeout(() => {
-            setPlayingNotes([]); // Clear after highlight
-            playNextStep();
-          }, 800); // Duration of highlight for a step
-        } else {
-          // Mode 2: Clear all melody highlights, then animate sequentially from original color
-          setPlayingNotes([]); // Ensure no yellow notes from previous step or interaction
-
-          // Small delay to ensure clear state renders
-          await new Promise((resolve) => setTimeout(resolve, 50));
-
-          for (const note of currentStep.notes) {
-            setPlayingNotes([note]); // Highlight one note at a time in yellow
-            await new Promise((resolve) => setTimeout(resolve, 300)); // Highlight duration for single note
-            setPlayingNotes([]); // Clear individual note (back to original base color)
-            await new Promise((resolve) => setTimeout(resolve, 100)); // Short delay between notes in a chord
-          }
-          currentSequenceIndexRef.current++;
-          // Delay before next chord/note in sequence, after current step's notes have animated
-          playTimeoutRef.current = setTimeout(playNextStep, 500);
-        }
+        // Both simultaneous and fade-in modes will highlight chords simultaneously
+        setPlayingNotes(currentStep.notes); // Highlight all notes in the step in yellow
+        currentSequenceIndexRef.current++;
+        playTimeoutRef.current = setTimeout(() => {
+          setPlayingNotes([]); // Clear the highlight
+          playNextStep();
+        }, 800); // Duration of highlight for a step
       } else {
         // Playback finished
         setPlayingNotes([]); // Clear any playing notes
@@ -183,30 +184,40 @@ const GuitarPlayground: React.FC = () => {
       }
     };
     playNextStep();
-  }, [selectedMelodySequence, animationMode]);
+  }, [selectedMelodySequence, animationMode]); // animationMode is a dependency as it influences how melodyNotes are passed
 
   const clearMelody = useCallback(() => {
+    // Clear ALL state related to melody, playing notes, and current selection
     setSelectedMelodySequence([]);
     setPlayingNotes([]);
-    setCurrentFretboardGroup([]);
+    setCurrentFretboardGroup([]); // Crucial for clearing blue highlight
     currentSequenceIndexRef.current = 0;
-    setIsMelodyPlaying(false); // Ensure this is false
+    setIsMelodyPlaying(false); // Ensure playback state is reset
+
+    // Clear any active timeouts to stop ongoing animations
     if (playTimeoutRef.current) {
       clearTimeout(playTimeoutRef.current);
       playTimeoutRef.current = null;
     }
-  }, []);
+  }, []); // Empty dependency array, as it only resets state
 
   // --- Notes to Display on Fretboard ---
-  // When not playing, display all selected melody notes in their static color.
-  // When playing in "sequential" mode, this array will be empty to allow notes to revert to original.
+  // `notesToShowAsMelody` for the static green highlight.
+  // It should include `currentFretboardGroup` for blue highlights when building a chord.
   const allMelodyPositions = selectedMelodySequence.flatMap(
     (item) => item.notes
   );
+
   const notesToShowAsMelody =
-    animationMode === "sequential" && isMelodyPlaying
-      ? [] // In sequential mode, during playback, melody notes are not statically highlighted
-      : [...allMelodyPositions, ...currentFretboardGroup]; // Otherwise, show melody notes + current group
+    animationMode === "fade-in" && isMelodyPlaying
+      ? [] // In "fade-in" mode, during playback, static melody notes are temporarily "hidden"
+      : allMelodyPositions; // Otherwise, show recorded melody notes
+
+  // The notes that are actively selected by Ctrl/Cmd (blue) OR are being played (yellow)
+  // These are passed to InteractiveFretboard's specific props
+  const notesForFretboardMelodyProp = notesToShowAsMelody; // This is for static green (or hidden in fade-in)
+  const notesForFretboardPlayingProp = playingNotes; // This is for yellow pulse
+  const notesForFretboardCurrentGroupProp = currentFretboardGroup; // This is for blue selection
 
   // --- Render Method ---
   return (
@@ -219,9 +230,11 @@ const GuitarPlayground: React.FC = () => {
         <InteractiveFretboard
           numFrets={numFrets}
           onFretboardInteraction={handleFretboardInteraction}
-          melodyNotes={notesToShowAsMelody} // These are the statically highlighted notes
-          playingNotes={playingNotes} // These are the dynamically animated notes
+          melodyNotes={notesForFretboardMelodyProp} // Static green (or hidden)
+          playingNotes={notesForFretboardPlayingProp} // Yellow pulse
+          currentGroupSelection={notesForFretboardCurrentGroupProp} // Blue highlight for active selection
           isMelodyPlaying={isMelodyPlaying} // Pass the new state
+          animationMode={animationMode} // Pass animation mode for conditional rendering in Fretboard
         />
       </div>
 
@@ -251,7 +264,7 @@ const GuitarPlayground: React.FC = () => {
             className="bg-gray-700 text-white rounded-md p-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
             <option value="simultaneous">Simultaneous</option>
-            <option value="sequential">Sequential</option>
+            <option value="fade-in">Fade In</option> {/* Renamed option */}
           </select>
         </div>
       </div>
@@ -277,9 +290,8 @@ const GuitarPlayground: React.FC = () => {
                       (pn) => pn[0] === note[0] && pn[1] === note[1]
                     )
                   ) &&
-                  index === currentSequenceIndexRef.current - 1 &&
-                  animationMode === "simultaneous"
-                    ? "bg-purple-500 text-white animate-pulse" // Only pulse the text for simultaneous
+                  index === currentSequenceIndexRef.current - 1
+                    ? "bg-purple-500 text-white animate-pulse" // This pulse applies to currently playing notes in the sequence text
                     : "bg-purple-900 text-purple-200"
                 }`}
               >

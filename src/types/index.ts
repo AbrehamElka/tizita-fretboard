@@ -1,63 +1,37 @@
-// src/types/index.ts
+// src/types.ts
 
-// --- General Types ---
-export type Note = string;
-export type FretPosition = [number, number]; // [string, fret]
+// Existing types (keep them as they are)
+export type FretPosition = [number, number]; // [stringNumber, fretNumber] e.g., [1, 5] for High E string, 5th fret
 
-// --- NEW: MelodyStep can be a single note or a chord ---
 export interface MelodySequenceItem {
   id: string;
-  notes: [number, number][]; // [stringIndex, fretNumber]
+  notes: FretPosition[];
   noteNames: string[];
   type: "single" | "chord";
 }
 
-// --- Chord Types (existing, but note how MelodySequenceItem uses FretPosition) ---
+// --- New Types for Chords ---
+
+export interface ChordPosition {
+  name: string; // e.g., "Open Position", "Barre E-shape"
+  frets: (number | null)[]; // Array of fret numbers (0 for open, null for muted), from high E (string 1) to low E (string 6)
+  fingers: (number | null)[]; // Array of finger numbers (1-4), null for open/muted
+  barre: {
+    fret: number;
+    stringFrom: number; // 1-indexed (1: high E, 6: low E)
+    stringTo: number; // 1-indexed
+  } | null;
+}
+
 export interface Chord {
   id: string;
   name: string;
-  root: Note;
-  type: string;
-  positions: Array<{
-    name?: string;
-    frets: (number | null)[];
-    fingers: (number | null)[];
-    barre?: {
-      fret: number;
-      strings: [number, number];
-    } | null;
-    capo?: number;
-  }>;
+  root: string; // e.g., "A", "C#", "E"
+  type: string; // e.g., "major", "minor", "7th"
+  positions: ChordPosition[];
 }
 
-// --- Scale Types (existing) ---
-export interface Scale {
-  id: string;
-  name: string;
-  root: Note;
-  type: string;
-  modes?: {
-    name: string;
-    description: string;
-  }[];
-  notes: Note[];
-  intervals: string[];
-  patterns: Array<{
-    name?: string;
-    diagram: FretPosition[];
-    rootNotes: FretPosition[];
-    recommendedFingering?: (number | null)[];
-  }>;
-}
-
-// --- Melody Types (existing, but the 'tabs' might use MelodySequenceItem now) ---
-export interface Melody {
-  id: string;
-  title: string;
-  composer?: string;
-  description?: string;
-  mode: string;
-  // This 'tabs' property would now be an array of MelodySequenceItem[]
-  tabs: MelodySequenceItem[]; // Changed from FretPosition[]
-  audioPath: string;
+// The top-level structure of your chords.json
+export interface ChordsData {
+  [rootNote: string]: Chord[]; // Keyed by root note (e.g., "A", "A#"), value is an array of Chord objects
 }
