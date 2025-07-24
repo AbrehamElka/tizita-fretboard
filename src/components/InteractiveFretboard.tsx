@@ -1,15 +1,16 @@
 // src/components/InteractiveFretboard.tsx
 
-import React from "react";
-import { FretPosition } from "../types"; // Adjust path if needed
+import React, { useState, useCallback } from "react";
+import { FretPosition } from "@/types"; // Adjust path if needed
 
 interface InteractiveFretboardProps {
-  staticHighlightedNotes?: FretPosition[];
-  melodyNotes?: FretPosition[];
-  playingNotes?: FretPosition[];
-  onFretClick: (stringNum: number, fretNum: number) => void;
+  staticHighlightedNotes?: FretPosition[]; // Keeping this if you want external static highlights
+  melodyNotes?: FretPosition[]; // Notes currently in the melody sequence (e.g., green highlight)
+  playingNotes?: FretPosition[]; // Notes currently being played (yellow pulse)
+  onFretboardInteraction: (notesToReport: FretPosition[]) => void;
   onStringSelect?: (stringNum: number) => void;
   numFrets?: number;
+  isMelodyPlaying?: boolean; // New prop to indicate if a melody is currently playing
 }
 
 // String names from high E to low E (for display)
@@ -45,91 +46,133 @@ const chromaticScale = [
 
 // Open string notes for a standard 6-string guitar, from high E to low E
 // Corresponds to stringNum 1 through 6
-const openStringNotes = ["E", "B", "G", "D", "A", "E"];
+const openStringNotesMap = {
+  1: { note: "E", octave: 4 }, // High E
+  2: { note: "B", octave: 3 },
+  3: { note: "G", octave: 3 },
+  4: { note: "D", octave: 3 },
+  5: { note: "A", octave: 2 },
+  6: { note: "E", octave: 2 }, // Low E
+};
 
 /**
- * Calculates the note name for a given string and fret.
+ * Calculates the note name for a given string and fret, including octave.
  * @param stringNum The string number (1 for high E, 6 for low E).
  * @param fretNum The fret number (0 for open string/nut).
- * @returns The calculated note name (e.g., "F", "G#").
+ * @returns The calculated note name (e.g., "E4", "G3").
  */
 const getNoteName = (stringNum: number, fretNum: number): string => {
-  // Adjust stringNum to 0-indexed for array access (0 for high E, 5 for low E)
-  const stringIndex = stringNum - 1;
+  const openNoteInfo =
+    openStringNotesMap[stringNum as keyof typeof openStringNotesMap];
+  if (!openNoteInfo) return "";
 
-  if (stringIndex < 0 || stringIndex >= openStringNotes.length) {
-    return ""; // Invalid string number
-  }
-
-  const openNote = openStringNotes[stringIndex];
+  const openNote = openNoteInfo.note;
   const openNoteIndex = chromaticScale.indexOf(openNote);
+  if (openNoteIndex === -1) return "";
 
-  if (openNoteIndex === -1) {
-    return ""; // Should not happen if openStringNotes are correctly mapped
-  }
+  const totalSteps = openNoteIndex + fretNum;
+  const noteName = chromaticScale[totalSteps % chromaticScale.length];
+  const currentOctave = openNoteInfo.octave + Math.floor(totalSteps / 12);
 
-  const noteIndex = (openNoteIndex + fretNum) % chromaticScale.length;
-  return chromaticScale[noteIndex];
+  return `${noteName}${currentOctave}`;
 };
 
 // --- End Note Calculation Additions ---
 
 export default function InteractiveFretboard({
   staticHighlightedNotes = [],
-  melodyNotes = [],
-  playingNotes = [],
-  onFretClick,
+  melodyNotes = [], // These are the notes that stay highlighted (e.g., green) when not playing
+  playingNotes = [], // These are the notes currently being played (yellow pulse)
+  onFretboardInteraction,
   onStringSelect,
-  numFrets = 15, // Default to 15 frets (0-14)
+  numFrets = 15,
+  isMelodyPlaying = false, // Default to false
 }: InteractiveFretboardProps) {
-  // Helper to check if a note is highlighted in any category
-  const isHighlighted = (stringNum: number, fretNum: number) =>
-    staticHighlightedNotes.some(([s, f]) => s === stringNum && f === fretNum);
-  const isMelody = (stringNum: number, fretNum: number) =>
-    melodyNotes.some(([s, f]) => s === stringNum && f === fretNum);
-  const isPlaying = (stringNum: number, fretNum: number) =>
-    playingNotes.some(([s, f]) => s === stringNum && f === fretNum);
+  const [currentGroupSelection, setCurrentGroupSelection] = useState<
+    FretPosition[]
+  >([]);
+
+  // Helper to check if a note is part of the 'melodyNotes' set
+  const isMelodyNote = useCallback(
+    (stringNum: number, fretNum: number) =>
+      melodyNotes.some(([s, f]) => s === stringNum && f === fretNum),
+    [melodyNotes]
+  );
+
+  // Helper to check if a note is currently in the 'playingNotes' set
+  const isPlayingNote = useCallback(
+    (stringNum: number, fretNum: number) =>
+      playingNotes.some(([s, f]) => s === stringNum && f === fretNum),
+    [playingNotes]
+  );
+
+  // Helper to check if a note is currently part of the active group selection (Ctrl/Cmd click)
+  const isInCurrentGroup = useCallback(
+    (stringNum: number, fretNum: number) =>
+      currentGroupSelection.some(([s, f]) => s === stringNum && f === fretNum),
+    [currentGroupSelection]
+  );
+
+  // Unified click handler for both frets and nuts
+  const handleClick = useCallback(
+    (
+      event: React.MouseEvent<HTMLButtonElement | HTMLDivElement>,
+      stringNum: number,
+      fretIdx: number
+    ) => {
+      // Prevent interaction if a melody is currently playing
+      if (isMelodyPlaying) {
+        console.log("Melody is playing, interaction disabled.");
+        return;
+      }
+
+      const clickedNote: FretPosition = [stringNum, fretIdx];
+      const isCtrlPressed = event.ctrlKey || event.metaKey;
+
+      if (isCtrlPressed) {
+        setCurrentGroupSelection((prevGroup) => {
+          const isAlreadyInGroup = prevGroup.some(
+            ([s, f]) => s === clickedNote[0] && f === clickedNote[1]
+          );
+
+          let newGroup: FretPosition[];
+          if (isAlreadyInGroup) {
+            newGroup = prevGroup.filter(
+              ([s, f]) => !(s === clickedNote[0] && f === clickedNote[1])
+            );
+          } else {
+            newGroup = [...prevGroup, clickedNote];
+          }
+          onFretboardInteraction(newGroup);
+          return newGroup;
+        });
+      } else {
+        setCurrentGroupSelection([]);
+        onFretboardInteraction([clickedNote]);
+      }
+    },
+    [onFretboardInteraction, isMelodyPlaying] // Add isMelodyPlaying as a dependency
+  );
 
   return (
     <div className="bg-gray-900 rounded-lg p-4 shadow-lg border border-gray-700">
-      {/* Removed items-center from here to allow individual alignment */}
       <div className="flex flex-col gap-2">
-        {/* String labels (optional, above the fretboard/nut) */}
-        {/* Added mx-auto to center these labels */}
-        <div className="flex gap-2 mb-2 mx-auto">
-          {stringNames.map((name, i) => (
-            <button
-              key={i}
-              className="w-10 h-8 flex items-center justify-center font-bold text-purple-400 bg-gray-800 rounded hover:bg-purple-700 transition-colors border border-gray-700"
-              onClick={() => onStringSelect && onStringSelect(i + 1)}
-              title={`Select string ${i + 1} (${name})`}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-
-        {/* Fretboard Grid Container (relative for absolutely positioned strings) */}
-        {/* The mx-auto on the table inside this div will center the fretboard */}
         <div className="relative overflow-x-auto w-full max-w-full">
-          {/* Overlay for drawing the strings (below the table/buttons) */}
-          {/* Set strings to z-0 so buttons can easily appear above them */}
-          {/* Changed z-15 to z-0 as previously suggested for proper layering */}
+          {/* Strings drawn as thin lines, Z-index adjusted */}
           <div className="absolute inset-0 z-15 pointer-events-none">
             {Array.from({ length: 6 }, (_, stringIdx) => {
-              // String thicknesses (adjust h-[.] values for visual preference)
               const stringHeightClass = [
-                "h-[1.5px]", // High E (thinnest)
+                "h-[1.5px]",
                 "h-[2px]",
                 "h-[2.5px]",
                 "h-[3px]",
                 "h-[3.5px]",
-                "h-[4px]", // Low E (thickest)
+                "h-[4px]",
               ][stringIdx];
 
-              const cellHeight = 40; // from h-10 (10*4px)
-              const borderSpacing = 2; // from border-spacing-0.5 (0.5*4px)
-              const stringPixelHeights = [1.5, 2, 2.5, 3, 3.5, 4]; // Corresponding pixel heights
+              const cellHeight = 40;
+              const borderSpacing = 2;
+              const stringPixelHeights = [1.5, 2, 2.5, 3, 3.5, 4];
 
               const topOffset =
                 stringIdx * (cellHeight + borderSpacing) +
@@ -146,27 +189,73 @@ export default function InteractiveFretboard({
             })}
           </div>
 
-          {/* Fretboard Table (buttons are inside this table) */}
-          {/* Added mx-auto here to center the table within its container */}
           <table className="border-separate border-spacing-0.5 mx-auto bg-gray-800 rounded-lg overflow-hidden relative">
             <tbody>
-              {/* Render 6 strings (rows) - from high E (index 0) to low E (index 5) */}
               {Array.from({ length: 6 }, (_, stringIdx) => {
-                const stringNum = stringIdx + 1; // 1 (high E) to 6 (low E)
+                const stringNum = stringIdx + 1;
                 return (
                   <tr key={stringIdx}>
-                    {/* Render frets (columns) including the nut (fret 0) */}
                     {Array.from({ length: numFrets + 1 }, (__, fretIdx) => {
                       const isNut = fretIdx === 0;
-                      const highlighted = isHighlighted(stringNum, fretIdx);
-                      const melody = isMelody(stringNum, fretIdx);
-                      const playing = isPlaying(stringNum, fretIdx);
+                      const playing = isPlayingNote(stringNum, fretIdx);
+                      const inCurrentGroup = isInCurrentGroup(
+                        stringNum,
+                        fretIdx
+                      );
+                      const melody = isMelodyNote(stringNum, fretIdx); // Check if it's a melody note
 
-                      // Determine if the button should be "active" to get a higher z-index
-                      const isActive = highlighted || melody || playing;
-
-                      // Calculate the note name for the current fret
                       const noteName = getNoteName(stringNum, fretIdx);
+
+                      // Determine the final background color based on precedence
+                      let bgColorClass = "bg-gray-900"; // Default fret color
+                      let textColorClass = "";
+
+                      if (isNut) {
+                        bgColorClass = "bg-gray-700"; // Default nut color
+                        textColorClass = "text-gray-300";
+                      } else {
+                        bgColorClass = "bg-gray-900"; // Default fret color
+                      }
+
+                      // Order of precedence: playing > currentGroupSelection > melody
+                      if (playing) {
+                        bgColorClass = "bg-yellow-400 animate-pulse";
+                        textColorClass = "text-white";
+                      } else if (inCurrentGroup) {
+                        bgColorClass = "bg-blue-600 border-blue-400"; // For Ctrl/Cmd selection
+                        textColorClass = "text-white";
+                      } else if (melody) {
+                        // This only applies if it's a melody note AND NOT being played AND NOT in current selection
+                        bgColorClass = "bg-green-500 shadow-md"; // Static melody color
+                        textColorClass = "text-white";
+                      }
+
+                      // Additional classes for scale, border, z-index, etc.
+                      const commonClasses = `
+                        relative w-8 h-8 rounded-full flex items-center justify-center
+                        mx-auto my-auto
+                        transition-all duration-200 ease-in-out
+                        cursor-pointer
+                        border-2 border-transparent
+                        ${playing ? "scale-110 shadow-lg" : ""}
+                        ${inCurrentGroup && !playing ? "scale-105" : ""}
+                        ${
+                          isMelodyPlaying
+                            ? "pointer-events-none"
+                            : "hover:bg-purple-700/50"
+                        }
+                        ${
+                          playing
+                            ? "z-30"
+                            : inCurrentGroup
+                            ? "z-18"
+                            : melody
+                            ? "z-25"
+                            : "z-10"
+                        }
+                        ${isNut ? "w-full h-full rounded-none" : ""}
+                        hover:z-20
+                      `;
 
                       return (
                         <td
@@ -181,49 +270,44 @@ export default function InteractiveFretboard({
                             }
                           `}
                         >
-                          {!isNut && (
+                          {isNut ? (
                             <button
                               className={`
-                                relative // Essential for z-index to work
-                                w-8 h-8 rounded-full flex items-center justify-center
-                                mx-auto my-auto
-                                transition-all duration-200 ease-in-out
-                                cursor-pointer
-                                border-2 border-transparent
-                                ${highlighted ? "border-purple-400" : ""}
-                                ${melody ? "bg-green-500 shadow-md" : ""}
-                                ${
-                                  playing
-                                    ? "animate-pulse bg-yellow-400 scale-110 shadow-lg"
-                                    : ""
-                                }
-                                ${
-                                  !highlighted && !melody && !playing
-                                    ? "bg-gray-900 hover:bg-purple-700/50"
-                                    : ""
-                                }
-                                ${
-                                  isActive
-                                    ? "z-20 text-white font-semibold text-sm"
-                                    : "z-10"
-                                }
-                                hover:z-20 // Ensures hover also brings it to front
+                                ${bgColorClass} ${textColorClass}
+                                ${commonClasses}
+                                ${isNut ? "border-r-2 border-gray-600" : ""}
+                                font-bold text-sm
                               `}
-                              onClick={() => onFretClick(stringNum, fretIdx)}
-                              title={`String ${stringNum}, Fret ${fretIdx}`}
+                              onClick={(event) =>
+                                handleClick(event, stringNum, fretIdx)
+                              }
+                              title={`Open String ${stringNames[stringIdx]} (${noteName})`}
                             >
-                              {/* Display note name only if the button is active */}
-                              {isActive ? noteName : ""}
+                              {stringNames[stringIdx]}
+                              {(playing || melody || inCurrentGroup) && (
+                                <span className="absolute bottom-1 text-xs">
+                                  {noteName}
+                                </span>
+                              )}
+                            </button>
+                          ) : (
+                            <button
+                              className={`
+                                ${bgColorClass} ${textColorClass}
+                                ${commonClasses}
+                              `}
+                              onClick={(event) =>
+                                handleClick(event, stringNum, fretIdx)
+                              }
+                              title={`String ${stringNum}, Fret ${fretIdx} (${noteName})`}
+                            >
+                              {playing || melody || inCurrentGroup
+                                ? noteName
+                                : ""}
                             </button>
                           )}
-                          {/* Add Nut appearance if it's the nut position */}
-                          {isNut && (
-                            <div className="w-full h-full bg-gray-700 flex items-center justify-center rounded-l-lg border-r-2 border-gray-600">
-                              {/* Optional: Nut indicator */}
-                            </div>
-                          )}
 
-                          {/* Fret Inlays (Dots) - only on specific frets and typically in the middle of the neck */}
+                          {/* Fret Markers (dots) */}
                           {stringIdx === 2 &&
                             (fretIdx === 3 ||
                               fretIdx === 5 ||
@@ -249,50 +333,18 @@ export default function InteractiveFretboard({
           </table>
         </div>
 
-        {/* Fret numbers below the fretboard */}
-        {/* Adjusted to align with the fretboard table */}
+        {/* Fret number labels at the bottom */}
         <div className="flex gap-0.5 mt-2 mx-auto">
-          {" "}
-          {/* Use gap-0.5 or gap-1 to match table spacing if needed. Removed bg-amber-400 and border-red for cleaner display */}
           {Array.from({ length: numFrets + 1 }, (__, i) => {
-            // Iterate numFrets + 1 times
             const isNutPosition = i === 0;
             return (
               <span
                 key={i}
-                // Each cell is w-10, table has border-spacing-0.5.
-                // For a <td>, w-10 means 40px. border-spacing-0.5 means 2px.
-                // The first <td> (nut) has a border-l-2.
-                // The frets after the nut (buttons) are w-8 (32px) and mx-auto inside w-10 <td>.
-                // This means there's 4px of padding on each side of the button within the <td>.
-                // Total width of a fret column (including half of the spacing on each side) is 40px + 2px = 42px.
-                // The nut column has border-l-2 (2px) + 40px (td width).
-                // To align numbers under the frets, we need to mimic the column widths.
-                // The nut number '0' needs to align with the *center* of the nut cell,
-                // and subsequent numbers with the *center* of their respective fret cells.
-
-                // Given the complexities of `border-separate` and `border-spacing`,
-                // the simplest approach is to match the `w-10` of the `<td>` and `text-center`.
-                // The `margin-left` or `padding-left` needs to compensate for the nut's left border
-                // and the overall table's centering.
-
-                // Let's simplify and rely on the table's `mx-auto` for overall centering
-                // and try to match the column widths.
                 className={`w-10 text-center text-xs text-gray-400 ${
                   isNutPosition ? "font-bold" : ""
                 }`}
-                // The `min-width` and `padding-left` are crucial for aligning with the table columns
-                // The first td has border-l-2. So the first number should account for that.
-                // All tds have border-r-1 (2px) and are w-10 (40px).
-                // Table has border-spacing-0.5 (2px).
-                // So, each column conceptually takes up `40px (td) + 2px (spacing)` = 42px.
-                // The first cell is 40px + 2px (left border) = 42px.
-                // A 'w-10' span is 40px wide. We need to center it within the 42px.
-                // The `mx-auto` on the parent div `flex gap-0.5 mx-auto` combined with `w-10` on each span
-                // should get it very close.
               >
-                {/* Conditional rendering for fret numbers */}
-                {isNutPosition ? "Nut" : i}
+                {isNutPosition ? "OPEN" : i}
               </span>
             );
           })}
